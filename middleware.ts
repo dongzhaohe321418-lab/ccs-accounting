@@ -4,6 +4,14 @@ import { jwtVerify } from 'jose';
 
 const PUBLIC_PATHS = ['/login', '/register', '/api/auth/login', '/api/auth/register'];
 
+// Cache JWT secret at module level for performance
+let _cachedJwtSecret: Uint8Array | null = null;
+function getJwtSecret(): Uint8Array {
+  if (_cachedJwtSecret) return _cachedJwtSecret;
+  _cachedJwtSecret = new TextEncoder().encode(process.env.JWT_SECRET);
+  return _cachedJwtSecret;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -20,10 +28,11 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, getJwtSecret());
 
-    if ((pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) && payload.role !== 'admin') {
+    // Use exact segment matching for admin paths to prevent false positives
+    const isAdminPath = pathname === '/admin' || pathname.startsWith('/admin/') || pathname.startsWith('/api/admin/') || pathname === '/api/admin';
+    if (isAdminPath && payload.role !== 'admin') {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: '权限不足' }, { status: 403 });
       }

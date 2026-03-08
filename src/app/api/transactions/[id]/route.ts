@@ -9,7 +9,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     await requireAuth();
     const { id } = await params;
-    const transaction = await getTransactionById(parseInt(id));
+    const txId = parseInt(id);
+    if (Number.isNaN(txId) || txId < 1) {
+      return NextResponse.json({ error: '无效的交易ID' }, { status: 400 });
+    }
+    const transaction = await getTransactionById(txId);
     if (!transaction) {
       return NextResponse.json({ error: '交易不存在' }, { status: 404 });
     }
@@ -27,6 +31,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const user = await requireAuth();
     const { id } = await params;
     const txId = parseInt(id);
+    if (Number.isNaN(txId) || txId < 1) {
+      return NextResponse.json({ error: '无效的交易ID' }, { status: 400 });
+    }
     const existing = await getTransactionById(txId);
     if (!existing) {
       return NextResponse.json({ error: '交易不存在' }, { status: 404 });
@@ -70,6 +77,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const user = await requireAuth();
     const { id } = await params;
     const txId = parseInt(id);
+    if (Number.isNaN(txId) || txId < 1) {
+      return NextResponse.json({ error: '无效的交易ID' }, { status: 400 });
+    }
     const existing = await getTransactionById(txId);
     if (!existing) {
       return NextResponse.json({ error: '交易不存在' }, { status: 404 });

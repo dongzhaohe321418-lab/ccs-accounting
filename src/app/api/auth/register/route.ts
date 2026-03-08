@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerSchema } from '@/lib/validators/auth';
 import { hashPassword } from '@/lib/auth';
-import { createUser, getUserByEmail, getUserCount } from '@/lib/db/users';
+import { createUserAtomicRole, getUserByEmail } from '@/lib/db/users';
 import { z } from 'zod';
 
 export async function POST(request: NextRequest) {
@@ -15,10 +15,8 @@ export async function POST(request: NextRequest) {
     }
 
     const passwordHash = await hashPassword(password);
-    // First user becomes admin
-    const userCount = await getUserCount();
-    const role = userCount === 0 ? 'admin' : 'member';
-    await createUser(email, passwordHash, name, role);
+    // Role determined atomically in SQL to prevent race condition
+    await createUserAtomicRole(email, passwordHash, name);
 
     return NextResponse.json({ message: '注册成功' }, { status: 201 });
   } catch (error) {

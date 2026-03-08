@@ -7,13 +7,35 @@ interface SyncTask {
   retryCount: number;
 }
 
+const MAX_QUEUE_SIZE = 200;
+
 class SyncQueue {
   private queue: SyncTask[] = [];
   private processing = false;
+  private pendingKeys = new Set<string>();
+
+  private taskKey(task: SyncTask): string {
+    return `${task.entityType}:${task.entityId}:${task.action}`;
+  }
 
   enqueue(task: SyncTask) {
+    // Deduplication: skip if identical task already queued
+    const key = this.taskKey(task);
+    if (this.pendingKeys.has(key)) {
+      return;
+    }
+
+    // Enforce max queue size to prevent memory leak
+    if (this.queue.length >= MAX_QUEUE_SIZE) {
+      console.warn(`Sync queue full (${MAX_QUEUE_SIZE}), dropping task: ${key}`);
+      return;
+    }
+
+    this.pendingKeys.add(key);
     this.queue.push(task);
+
     if (!this.processing) {
+      this.processing = true;
       this.processNext();
     }
   }
@@ -24,8 +46,9 @@ class SyncQueue {
       return;
     }
 
-    this.processing = true;
     const task = this.queue.shift()!;
+    const key = this.taskKey(task);
+    this.pendingKeys.delete(key);
 
     try {
       if (task.entityType === 'transaction') {
@@ -39,15 +62,26 @@ class SyncQueue {
       if (task.retryCount < 10) {
         const delay = Math.min(1000 * Math.pow(2, task.retryCount), 60000);
         setTimeout(() => {
-          this.enqueue({ ...task, retryCount: task.retryCount + 1 });
+          try {
+            this.enqueue({ ...task, retryCount: task.retryCount + 1 });
+          } catch (retryError) {
+            console.error(`Retry enqueue failed for ${task.entityType} #${task.entityId}:`, retryError);
+          }
         }, delay);
       } else {
         console.error(`Giving up on ${task.entityType} #${task.entityId} after 10 retries`);
       }
     }
 
-    // Process next task
-    setTimeout(() => this.processNext(), 100);
+    // Process next task with error guard
+    setTimeout(() => {
+      try {
+        this.processNext();
+      } catch (err) {
+        console.error('processNext error:', err);
+        this.processing = false;
+      }
+    }, 100);
   }
 
   getQueueLength(): number {

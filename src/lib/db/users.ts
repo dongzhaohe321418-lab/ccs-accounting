@@ -40,6 +40,18 @@ export async function createUser(email: string, passwordHash: string, name: stri
   return Number(result.lastInsertRowid);
 }
 
+// Atomic: role determined in SQL to prevent first-user race condition
+export async function createUserAtomicRole(email: string, passwordHash: string, name: string): Promise<{ id: number; role: string }> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: "INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, CASE WHEN (SELECT COUNT(*) FROM users) = 0 THEN 'admin' ELSE 'member' END)",
+    args: [email, passwordHash, name],
+  });
+  const id = Number(result.lastInsertRowid);
+  const user = await db.execute({ sql: 'SELECT role FROM users WHERE id = ?', args: [id] });
+  return { id, role: String(user.rows[0].role) };
+}
+
 export async function getAllUsers(): Promise<User[]> {
   const db = await ensureDb();
   const result = await db.execute('SELECT id, email, name, role, is_active, created_at, updated_at FROM users ORDER BY created_at DESC');

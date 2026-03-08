@@ -10,6 +10,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const admin = await requireAdmin();
     const { id } = await params;
     const rId = parseInt(id);
+    if (Number.isNaN(rId) || rId < 1) {
+      return NextResponse.json({ error: '无效的报销ID' }, { status: 400 });
+    }
     const existing = await getReimbursementById(rId);
 
     if (!existing) {

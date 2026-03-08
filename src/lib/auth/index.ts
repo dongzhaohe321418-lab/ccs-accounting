@@ -12,16 +12,22 @@ export async function verifyPassword(password: string, hashedPassword: string): 
   return compare(password, hashedPassword);
 }
 
-function getJwtSecret() {
+// Cache the encoded JWT secret at module level to avoid
+// creating a new TextEncoder on every call
+let _cachedSecret: Uint8Array | null = null;
+
+function getJwtSecret(): Uint8Array {
+  if (_cachedSecret) return _cachedSecret;
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error('JWT_SECRET is not set');
-  return new TextEncoder().encode(secret);
+  _cachedSecret = new TextEncoder().encode(secret);
+  return _cachedSecret;
 }
 
 export async function signToken(payload: AuthPayload): Promise<string> {
   return new SignJWT(payload as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime('7d')
+    .setExpirationTime('24h')
     .setIssuedAt()
     .sign(getJwtSecret());
 }
