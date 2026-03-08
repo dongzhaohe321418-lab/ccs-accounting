@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const type = request.nextUrl.searchParams.get('type') || 'transactions';
 
     if (type === 'transactions') {
-      const transactions = getAllTransactions();
+      const transactions = await getAllTransactions();
       const header = 'ID,类型,金额(GBP),分类,日期,描述,记录人,创建时间\n';
       const rows = transactions.map(t =>
         `${t.id},${t.type === 'income' ? '收入' : '支出'},${t.amount},${t.category_name || ''},${t.date},"${t.description}",${t.user_name || ''},${t.created_at}`
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
         },
       });
     } else {
-      const reimbursements = getAllReimbursements();
+      const reimbursements = await getAllReimbursements();
       const header = 'ID,金额(GBP),分类,日期,描述,申请人,状态,审批人,审批时间,备注\n';
       const rows = reimbursements.map(r =>
         `${r.id},${r.amount},${r.category_name || ''},${r.date},"${r.description}",${r.user_name || ''},${r.status},${r.reviewer_name || ''},${r.reviewed_at || ''},"${r.review_notes || ''}"`

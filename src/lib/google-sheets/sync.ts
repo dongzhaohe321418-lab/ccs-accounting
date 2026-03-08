@@ -46,7 +46,7 @@ export async function syncTransactionToSheet(transactionId: number) {
 
   await ensureSheetHeaders('交易记录', TRANSACTION_HEADERS);
 
-  const t = getTransactionById(transactionId);
+  const t = await getTransactionById(transactionId);
   if (!t) return;
 
   const now = new Date().toISOString();
@@ -94,10 +94,10 @@ export async function syncTransactionToSheet(transactionId: number) {
       });
     }
 
-    updateTransactionSyncStatus(transactionId, 'synced', now);
+    await updateTransactionSyncStatus(transactionId, 'synced', now);
   } catch (error) {
     console.error('Failed to sync transaction to Google Sheets:', error);
-    updateTransactionSyncStatus(transactionId, 'failed');
+    await updateTransactionSyncStatus(transactionId, 'failed');
     throw error;
   }
 }
@@ -112,7 +112,7 @@ export async function syncReimbursementToSheet(reimbursementId: number) {
 
   await ensureSheetHeaders('报销记录', REIMBURSEMENT_HEADERS);
 
-  const r = getReimbursementById(reimbursementId);
+  const r = await getReimbursementById(reimbursementId);
   if (!r) return;
 
   const now = new Date().toISOString();
@@ -163,10 +163,10 @@ export async function syncReimbursementToSheet(reimbursementId: number) {
       });
     }
 
-    updateReimbursementSyncStatus(reimbursementId, 'synced', now);
+    await updateReimbursementSyncStatus(reimbursementId, 'synced', now);
   } catch (error) {
     console.error('Failed to sync reimbursement to Google Sheets:', error);
-    updateReimbursementSyncStatus(reimbursementId, 'failed');
+    await updateReimbursementSyncStatus(reimbursementId, 'failed');
     throw error;
   }
 }

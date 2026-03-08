@@ -9,16 +9,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, password, name } = registerSchema.parse(body);
 
-    const existing = getUserByEmail(email);
+    const existing = await getUserByEmail(email);
     if (existing) {
       return NextResponse.json({ error: '该邮箱已被注册' }, { status: 400 });
     }
 
     const passwordHash = await hashPassword(password);
     // First user becomes admin
-    const userCount = getUserCount();
+    const userCount = await getUserCount();
     const role = userCount === 0 ? 'admin' : 'member';
-    createUser(email, passwordHash, name, role);
+    await createUser(email, passwordHash, name, role);
 
     return NextResponse.json({ message: '注册成功' }, { status: 201 });
   } catch (error) {

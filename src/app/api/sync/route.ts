@@ -18,8 +18,8 @@ export async function GET() {
   const spreadsheetId = getSpreadsheetId();
   const configured = !!(client && spreadsheetId);
 
-  const unsyncedTransactions = getUnsyncedTransactions();
-  const unsyncedReimbursements = getUnsyncedReimbursements();
+  const unsyncedTransactions = await getUnsyncedTransactions();
+  const unsyncedReimbursements = await getUnsyncedReimbursements();
 
   return NextResponse.json({
     configured,

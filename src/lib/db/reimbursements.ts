@@ -1,5 +1,29 @@
-import { getDb } from './index';
+import { ensureDb } from './index';
 import type { Reimbursement } from '@/types';
+import type { Row } from '@libsql/client';
+
+function rowToReimbursement(row: Row): Reimbursement {
+  return {
+    id: Number(row.id),
+    user_id: Number(row.user_id),
+    amount: Number(row.amount),
+    category_id: Number(row.category_id),
+    date: String(row.date),
+    description: String(row.description),
+    receipt_path: row.receipt_path ? String(row.receipt_path) : null,
+    status: String(row.status),
+    reviewed_by: row.reviewed_by ? Number(row.reviewed_by) : null,
+    reviewed_at: row.reviewed_at ? String(row.reviewed_at) : null,
+    review_notes: row.review_notes ? String(row.review_notes) : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+    synced_at: row.synced_at ? String(row.synced_at) : null,
+    sync_status: String(row.sync_status),
+    user_name: row.user_name ? String(row.user_name) : undefined,
+    category_name: row.category_name ? String(row.category_name) : undefined,
+    reviewer_name: row.reviewer_name ? String(row.reviewer_name) : undefined,
+  } as Reimbursement;
+}
 
 interface CreateReimbursementInput {
   userId: number;
@@ -10,147 +34,141 @@ interface CreateReimbursementInput {
   receiptPath?: string;
 }
 
-export function createReimbursement(input: CreateReimbursementInput): Reimbursement {
-  const db = getDb();
-  const result = db.prepare(`
-    INSERT INTO reimbursements (user_id, amount, category_id, date, description, receipt_path)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(input.userId, input.amount, input.categoryId, input.date, input.description, input.receiptPath || null);
-  return getReimbursementById(result.lastInsertRowid as number)!;
+export async function createReimbursement(input: CreateReimbursementInput): Promise<Reimbursement> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: 'INSERT INTO reimbursements (user_id, amount, category_id, date, description, receipt_path) VALUES (?, ?, ?, ?, ?, ?)',
+    args: [input.userId, input.amount, input.categoryId, input.date, input.description, input.receiptPath || null],
+  });
+  return (await getReimbursementById(Number(result.lastInsertRowid)))!;
 }
 
-export function getReimbursementById(id: number): Reimbursement | undefined {
-  const db = getDb();
-  return db.prepare(`
-    SELECT r.*, u.name as user_name, c.name as category_name,
-           rv.name as reviewer_name
-    FROM reimbursements r
-    LEFT JOIN users u ON r.user_id = u.id
-    LEFT JOIN categories c ON r.category_id = c.id
-    LEFT JOIN users rv ON r.reviewed_by = rv.id
-    WHERE r.id = ?
-  `).get(id) as Reimbursement | undefined;
+export async function getReimbursementById(id: number): Promise<Reimbursement | undefined> {
+  const db = await ensureDb();
+  const result = await db.execute({
+    sql: `SELECT r.*, u.name as user_name, c.name as category_name, rv.name as reviewer_name
+          FROM reimbursements r
+          LEFT JOIN users u ON r.user_id = u.id
+          LEFT JOIN categories c ON r.category_id = c.id
+          LEFT JOIN users rv ON r.reviewed_by = rv.id
+          WHERE r.id = ?`,
+    args: [id],
+  });
+  return result.rows.length > 0 ? rowToReimbursement(result.rows[0]) : undefined;
 }
 
-export function listReimbursements(options: {
+export async function listReimbursements(options: {
   userId?: number;
   status?: string;
   limit?: number;
   offset?: number;
-}): { data: Reimbursement[]; total: number } {
-  const db = getDb();
+}): Promise<{ data: Reimbursement[]; total: number }> {
+  const db = await ensureDb();
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  const args: (string | number)[] = [];
 
-  if (options.userId) {
-    conditions.push('r.user_id = ?');
-    params.push(options.userId);
-  }
-  if (options.status) {
-    conditions.push('r.status = ?');
-    params.push(options.status);
-  }
+  if (options.userId) { conditions.push('r.user_id = ?'); args.push(options.userId); }
+  if (options.status) { conditions.push('r.status = ?'); args.push(options.status); }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const limit = options.limit || 20;
   const offset = options.offset || 0;
 
-  const total = (db.prepare(`SELECT COUNT(*) as c FROM reimbursements r ${where}`).get(...params) as { c: number }).c;
-  const data = db.prepare(`
-    SELECT r.*, u.name as user_name, c.name as category_name,
-           rv.name as reviewer_name
-    FROM reimbursements r
-    LEFT JOIN users u ON r.user_id = u.id
-    LEFT JOIN categories c ON r.category_id = c.id
-    LEFT JOIN users rv ON r.reviewed_by = rv.id
-    ${where}
-    ORDER BY r.created_at DESC
-    LIMIT ? OFFSET ?
-  `).all(...params, limit, offset) as Reimbursement[];
+  const countResult = await db.execute({ sql: `SELECT COUNT(*) as c FROM reimbursements r ${where}`, args });
+  const total = Number(countResult.rows[0].c);
 
-  return { data, total };
+  const dataResult = await db.execute({
+    sql: `SELECT r.*, u.name as user_name, c.name as category_name, rv.name as reviewer_name
+          FROM reimbursements r
+          LEFT JOIN users u ON r.user_id = u.id
+          LEFT JOIN categories c ON r.category_id = c.id
+          LEFT JOIN users rv ON r.reviewed_by = rv.id
+          ${where}
+          ORDER BY r.created_at DESC
+          LIMIT ? OFFSET ?`,
+    args: [...args, limit, offset],
+  });
+
+  return { data: dataResult.rows.map(rowToReimbursement), total };
 }
 
-export function approveReimbursement(id: number, reviewerId: number, status: 'approved' | 'rejected', notes: string): Reimbursement | undefined {
-  const db = getDb();
-  db.prepare(`
-    UPDATE reimbursements
-    SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), review_notes = ?,
-        updated_at = datetime('now'), sync_status = 'pending'
-    WHERE id = ?
-  `).run(status, reviewerId, notes, id);
+export async function approveReimbursement(id: number, reviewerId: number, status: 'approved' | 'rejected', notes: string): Promise<Reimbursement | undefined> {
+  const db = await ensureDb();
+  await db.execute({
+    sql: "UPDATE reimbursements SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), review_notes = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ?",
+    args: [status, reviewerId, notes, id],
+  });
   return getReimbursementById(id);
 }
 
-export function markReimbursementPaid(id: number): Reimbursement | undefined {
-  const db = getDb();
-  db.prepare(`
-    UPDATE reimbursements
-    SET status = 'paid', updated_at = datetime('now'), sync_status = 'pending'
-    WHERE id = ? AND status = 'approved'
-  `).run(id);
+export async function markReimbursementPaid(id: number): Promise<Reimbursement | undefined> {
+  const db = await ensureDb();
+  await db.execute({
+    sql: "UPDATE reimbursements SET status = 'paid', updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND status = 'approved'",
+    args: [id],
+  });
   return getReimbursementById(id);
 }
 
-export function getPendingReimbursementsCount(): number {
-  const db = getDb();
-  const result = db.prepare("SELECT COUNT(*) as c FROM reimbursements WHERE status = 'pending'").get() as { c: number };
-  return result.c;
+export async function getPendingReimbursementsCount(): Promise<number> {
+  const db = await ensureDb();
+  const result = await db.execute("SELECT COUNT(*) as c FROM reimbursements WHERE status = 'pending'");
+  return Number(result.rows[0].c);
 }
 
-export function updateReimbursement(id: number, input: Partial<CreateReimbursementInput>): Reimbursement | undefined {
-  const db = getDb();
+export async function updateReimbursement(id: number, input: Partial<CreateReimbursementInput>): Promise<Reimbursement | undefined> {
+  const db = await ensureDb();
   const fields: string[] = [];
-  const params: unknown[] = [];
+  const args: (string | number | null)[] = [];
 
-  if (input.amount !== undefined) { fields.push('amount = ?'); params.push(input.amount); }
-  if (input.categoryId !== undefined) { fields.push('category_id = ?'); params.push(input.categoryId); }
-  if (input.date !== undefined) { fields.push('date = ?'); params.push(input.date); }
-  if (input.description !== undefined) { fields.push('description = ?'); params.push(input.description); }
-  if (input.receiptPath !== undefined) { fields.push('receipt_path = ?'); params.push(input.receiptPath); }
+  if (input.amount !== undefined) { fields.push('amount = ?'); args.push(input.amount); }
+  if (input.categoryId !== undefined) { fields.push('category_id = ?'); args.push(input.categoryId); }
+  if (input.date !== undefined) { fields.push('date = ?'); args.push(input.date); }
+  if (input.description !== undefined) { fields.push('description = ?'); args.push(input.description); }
+  if (input.receiptPath !== undefined) { fields.push('receipt_path = ?'); args.push(input.receiptPath); }
 
   if (fields.length === 0) return getReimbursementById(id);
 
-  fields.push(`updated_at = datetime('now')`);
+  fields.push("updated_at = datetime('now')");
   fields.push('sync_status = ?');
-  params.push('pending');
-  params.push(id);
+  args.push('pending');
+  args.push(id);
 
-  db.prepare(`UPDATE reimbursements SET ${fields.join(', ')} WHERE id = ? AND status = 'pending'`).run(...params);
+  await db.execute({ sql: `UPDATE reimbursements SET ${fields.join(', ')} WHERE id = ? AND status = 'pending'`, args });
   return getReimbursementById(id);
 }
 
-export function getUnsyncedReimbursements(): Reimbursement[] {
-  const db = getDb();
-  return db.prepare(`
-    SELECT r.*, u.name as user_name, c.name as category_name,
-           rv.name as reviewer_name
-    FROM reimbursements r
-    LEFT JOIN users u ON r.user_id = u.id
-    LEFT JOIN categories c ON r.category_id = c.id
-    LEFT JOIN users rv ON r.reviewed_by = rv.id
-    WHERE r.sync_status != 'synced'
-  `).all() as Reimbursement[];
+export async function getUnsyncedReimbursements(): Promise<Reimbursement[]> {
+  const db = await ensureDb();
+  const result = await db.execute(
+    `SELECT r.*, u.name as user_name, c.name as category_name, rv.name as reviewer_name
+     FROM reimbursements r
+     LEFT JOIN users u ON r.user_id = u.id
+     LEFT JOIN categories c ON r.category_id = c.id
+     LEFT JOIN users rv ON r.reviewed_by = rv.id
+     WHERE r.sync_status != 'synced'`
+  );
+  return result.rows.map(rowToReimbursement);
 }
 
-export function updateReimbursementSyncStatus(id: number, status: string, syncedAt?: string): void {
-  const db = getDb();
+export async function updateReimbursementSyncStatus(id: number, status: string, syncedAt?: string): Promise<void> {
+  const db = await ensureDb();
   if (syncedAt) {
-    db.prepare('UPDATE reimbursements SET sync_status = ?, synced_at = ? WHERE id = ?').run(status, syncedAt, id);
+    await db.execute({ sql: 'UPDATE reimbursements SET sync_status = ?, synced_at = ? WHERE id = ?', args: [status, syncedAt, id] });
   } else {
-    db.prepare('UPDATE reimbursements SET sync_status = ? WHERE id = ?').run(status, id);
+    await db.execute({ sql: 'UPDATE reimbursements SET sync_status = ? WHERE id = ?', args: [status, id] });
   }
 }
 
-export function getAllReimbursements(): Reimbursement[] {
-  const db = getDb();
-  return db.prepare(`
-    SELECT r.*, u.name as user_name, c.name as category_name,
-           rv.name as reviewer_name
-    FROM reimbursements r
-    LEFT JOIN users u ON r.user_id = u.id
-    LEFT JOIN categories c ON r.category_id = c.id
-    LEFT JOIN users rv ON r.reviewed_by = rv.id
-    ORDER BY r.created_at DESC
-  `).all() as Reimbursement[];
+export async function getAllReimbursements(): Promise<Reimbursement[]> {
+  const db = await ensureDb();
+  const result = await db.execute(
+    `SELECT r.*, u.name as user_name, c.name as category_name, rv.name as reviewer_name
+     FROM reimbursements r
+     LEFT JOIN users u ON r.user_id = u.id
+     LEFT JOIN categories c ON r.category_id = c.id
+     LEFT JOIN users rv ON r.reviewed_by = rv.id
+     ORDER BY r.created_at DESC`
+  );
+  return result.rows.map(rowToReimbursement);
 }

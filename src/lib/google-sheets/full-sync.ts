@@ -31,7 +31,7 @@ export async function fullSync(): Promise<{ success: boolean; message: string; d
     }
 
     // Sync transactions
-    const transactions = getAllTransactions();
+    const transactions = await getAllTransactions();
     const now = new Date().toISOString();
     const txRows = transactions.map(t => [
       t.id,
@@ -54,11 +54,11 @@ export async function fullSync(): Promise<{ success: boolean; message: string; d
 
     // Mark all transactions as synced
     for (const t of transactions) {
-      updateTransactionSyncStatus(t.id, 'synced', now);
+      await updateTransactionSyncStatus(t.id, 'synced', now);
     }
 
     // Sync reimbursements
-    const reimbursements = getAllReimbursements();
+    const reimbursements = await getAllReimbursements();
     const statusMap: Record<string, string> = { pending: '待审批', approved: '已批准', rejected: '已拒绝', paid: '已付款' };
     const reimRows = reimbursements.map(r => [
       r.id,
@@ -83,11 +83,11 @@ export async function fullSync(): Promise<{ success: boolean; message: string; d
     });
 
     for (const r of reimbursements) {
-      updateReimbursementSyncStatus(r.id, 'synced', now);
+      await updateReimbursementSyncStatus(r.id, 'synced', now);
     }
 
     // Sync members
-    const users = getAllUsers();
+    const users = await getAllUsers();
     const memberRows = users.map(u => [
       u.id,
       u.name,

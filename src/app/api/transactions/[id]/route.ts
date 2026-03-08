@@ -9,7 +9,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     await requireAuth();
     const { id } = await params;
-    const transaction = getTransactionById(parseInt(id));
+    const transaction = await getTransactionById(parseInt(id));
     if (!transaction) {
       return NextResponse.json({ error: '交易不存在' }, { status: 404 });
     }
@@ -27,7 +27,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const user = await requireAuth();
     const { id } = await params;
     const txId = parseInt(id);
-    const existing = getTransactionById(txId);
+    const existing = await getTransactionById(txId);
     if (!existing) {
       return NextResponse.json({ error: '交易不存在' }, { status: 404 });
     }
@@ -37,7 +37,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const body = await request.json();
     const validated = updateTransactionSchema.parse(body);
-    const updated = updateTransaction(txId, {
+    const updated = await updateTransaction(txId, {
       type: validated.type,
       amount: validated.amount,
       categoryId: validated.categoryId,
@@ -70,7 +70,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const user = await requireAuth();
     const { id } = await params;
     const txId = parseInt(id);
-    const existing = getTransactionById(txId);
+    const existing = await getTransactionById(txId);
     if (!existing) {
       return NextResponse.json({ error: '交易不存在' }, { status: 404 });
     }
@@ -78,7 +78,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
       return NextResponse.json({ error: '无权删除' }, { status: 403 });
     }
 
-    deleteTransaction(txId);
+    await deleteTransaction(txId);
 
     syncQueue.enqueue({
       entityType: 'transaction',

@@ -1,31 +1,32 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import { createClient, type Client } from '@libsql/client';
 import { runMigrations } from './schema';
 
-const DB_PATH = path.resolve(process.cwd(), process.env.DATABASE_PATH || './data/ccs.db');
+let client: Client | null = null;
+let migrated = false;
 
-let db: Database.Database | null = null;
+export function getDb(): Client {
+  if (client) return client;
 
-export function getDb(): Database.Database {
-  if (db) return db;
+  const url = process.env.TURSO_DATABASE_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN;
 
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  if (!url) {
+    throw new Error('TURSO_DATABASE_URL is not set');
   }
 
-  db = new Database(DB_PATH);
+  client = createClient({
+    url,
+    authToken,
+  });
 
-  // Critical stability settings
-  db.pragma('journal_mode = WAL');
-  db.pragma('busy_timeout = 5000');
-  db.pragma('synchronous = NORMAL');
-  db.pragma('cache_size = -64000');
-  db.pragma('foreign_keys = ON');
-  db.pragma('temp_store = MEMORY');
+  return client;
+}
 
-  runMigrations(db);
-
+export async function ensureDb(): Promise<Client> {
+  const db = getDb();
+  if (!migrated) {
+    await runMigrations(db);
+    migrated = true;
+  }
   return db;
 }

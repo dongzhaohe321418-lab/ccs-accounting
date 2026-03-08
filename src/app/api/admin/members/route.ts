@@ -6,7 +6,7 @@ import { z } from 'zod';
 export async function GET() {
   try {
     await requireAdmin();
-    const users = getAllUsers();
+    const users = await getAllUsers();
     return NextResponse.json(users);
   } catch (error) {
     if (error instanceof Error && (error.message === '未登录' || error.message === '权限不足')) {
@@ -28,8 +28,8 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { id, role, isActive } = updateMemberSchema.parse(body);
 
-    if (role !== undefined) updateUserRole(id, role);
-    if (isActive !== undefined) updateUserStatus(id, isActive);
+    if (role !== undefined) await updateUserRole(id, role);
+    if (isActive !== undefined) await updateUserStatus(id, isActive);
 
     return NextResponse.json({ message: '更新成功' });
   } catch (error) {

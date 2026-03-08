@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const status = searchParams.get('status') || undefined;
 
-    const result = listReimbursements({
+    const result = await listReimbursements({
       status,
       limit,
       offset: (page - 1) * limit,
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createReimbursementSchema.parse(body);
 
-    const reimbursement = createReimbursement({
+    const reimbursement = await createReimbursement({
       userId: user.userId,
       amount: validated.amount,
       categoryId: validated.categoryId,

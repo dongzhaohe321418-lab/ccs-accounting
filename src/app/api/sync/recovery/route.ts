@@ -19,8 +19,8 @@ export async function POST() {
     return NextResponse.json({ error: 'Google Sheets 未配置' }, { status: 400 });
   }
 
-  const unsyncedTx = getUnsyncedTransactions();
-  const unsyncedReim = getUnsyncedReimbursements();
+  const unsyncedTx = await getUnsyncedTransactions();
+  const unsyncedReim = await getUnsyncedReimbursements();
 
   for (const t of unsyncedTx) {
     syncQueue.enqueue({ entityType: 'transaction', entityId: t.id, action: 'create', retryCount: 0 });

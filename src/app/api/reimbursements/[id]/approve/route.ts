@@ -10,7 +10,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const admin = await requireAdmin();
     const { id } = await params;
     const rId = parseInt(id);
-    const existing = getReimbursementById(rId);
+    const existing = await getReimbursementById(rId);
 
     if (!existing) {
       return NextResponse.json({ error: '报销记录不存在' }, { status: 404 });
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (existing.status !== 'approved') {
         return NextResponse.json({ error: '只能将已批准的报销标记为已付款' }, { status: 400 });
       }
-      const updated = markReimbursementPaid(rId);
+      const updated = await markReimbursementPaid(rId);
       syncQueue.enqueue({ entityType: 'reimbursement', entityId: rId, action: 'update', retryCount: 0 });
       return NextResponse.json(updated);
     }
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const validated = approveReimbursementSchema.parse(body);
-    const updated = approveReimbursement(rId, admin.userId, validated.status, validated.notes);
+    const updated = await approveReimbursement(rId, admin.userId, validated.status, validated.notes);
 
     syncQueue.enqueue({
       entityType: 'reimbursement',

@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const type = searchParams.get('type') || undefined;
 
-    const result = listTransactions({
+    const result = await listTransactions({
       type,
       limit,
       offset: (page - 1) * limit,
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createTransactionSchema.parse(body);
 
-    const transaction = createTransaction({
+    const transaction = await createTransaction({
       userId: user.userId,
       type: validated.type,
       amount: validated.amount,

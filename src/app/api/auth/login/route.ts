@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, password } = loginSchema.parse(body);
 
-    const user = getUserPasswordHash(email);
+    const user = await getUserPasswordHash(email);
     if (!user) {
       return NextResponse.json({ error: '邮箱或密码错误' }, { status: 401 });
     }

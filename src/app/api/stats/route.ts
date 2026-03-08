@@ -8,10 +8,10 @@ export async function GET() {
   try {
     await requireAuth();
 
-    const { totalIncome, totalExpense } = getTransactionStats();
-    const pendingReimbursements = getPendingReimbursementsCount();
-    const totalMembers = getUserCount();
-    const recentTransactions = getRecentTransactions(5);
+    const { totalIncome, totalExpense } = await getTransactionStats();
+    const pendingReimbursements = await getPendingReimbursementsCount();
+    const totalMembers = await getUserCount();
+    const recentTransactions = await getRecentTransactions(5);
 
     return NextResponse.json({
       totalIncome,

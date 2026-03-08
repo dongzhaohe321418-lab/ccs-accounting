@@ -9,7 +9,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     await requireAuth();
     const { id } = await params;
-    const reimbursement = getReimbursementById(parseInt(id));
+    const reimbursement = await getReimbursementById(parseInt(id));
     if (!reimbursement) {
       return NextResponse.json({ error: '报销记录不存在' }, { status: 404 });
     }
@@ -27,7 +27,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const user = await requireAuth();
     const { id } = await params;
     const rId = parseInt(id);
-    const existing = getReimbursementById(rId);
+    const existing = await getReimbursementById(rId);
 
     if (!existing) {
       return NextResponse.json({ error: '报销记录不存在' }, { status: 404 });
@@ -41,7 +41,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const body = await request.json();
     const validated = createReimbursementSchema.partial().parse(body);
-    const updated = updateReimbursement(rId, {
+    const updated = await updateReimbursement(rId, {
       amount: validated.amount,
       categoryId: validated.categoryId,
       date: validated.date,

@@ -7,7 +7,7 @@ export async function GET() {
   if (!session) {
     return NextResponse.json({ error: '未登录' }, { status: 401 });
   }
-  const user = getUserById(session.userId);
+  const user = await getUserById(session.userId);
   if (!user) {
     return NextResponse.json({ error: '用户不存在' }, { status: 404 });
   }
